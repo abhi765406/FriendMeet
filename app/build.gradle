@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.abhi.friendmeet'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.abhi.friendmeet'
+        minSdk 21
+        targetSdk 28
+        versionCode 1
+        versionName '1.0.0'
+    }
+}
+dependencies {
+    implementation 'io.github.webrtc-sdk:android:150.7871.01'
+    implementation 'org.java-websocket:Java-WebSocket:1.5.7'
+}

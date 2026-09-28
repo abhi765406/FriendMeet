@@ -5,6 +5,7 @@ import android.app.*;
 import android.content.*;
 import android.content.pm.PackageManager;
 import android.media.projection.MediaProjectionManager;
+import android.media.projection.MediaProjection;
 import android.net.Uri;
 import android.os.*;
 import android.graphics.Color;
@@ -70,9 +71,9 @@ public class MainActivity extends Activity implements SignalingClient.Listener {
    String ty=o.optString("type");
    if(ty.equals("joined")){initiator=o.optBoolean("initiator");peerId=o.optString("peerId");roomText.setText("Room "+roomId+" • "+(initiator?"Host":"Guest"));startCamera();if(initiator)offer();}
    else if(ty.equals("peer-joined")){peerId=o.optString("id");if(initiator)offer();}
-   else if(ty.equals("offer")){peerId=o.optString("from");ensurePeer();peer.setRemoteDescription(new SimpleSdpObserver(){public void onSetSuccess(){answer();}},SessionDescription.fromJson(o.getString("sdp")));}
-   else if(ty.equals("answer")){if(peer!=null)peer.setRemoteDescription(new SimpleSdpObserver(),SessionDescription.fromJson(o.getString("sdp")));}
-   else if(ty.equals("candidate")){if(peer!=null)peer.addIceCandidate(IceCandidate.fromJson(o.getString("candidate")));}
+   else if(ty.equals("offer")){peerId=o.optString("from");ensurePeer();peer.setRemoteDescription(new SimpleSdpObserver(){public void onSetSuccess(){answer();}},sdpFromJson(o.getString("sdp")));}
+   else if(ty.equals("answer")){if(peer!=null)peer.setRemoteDescription(new SimpleSdpObserver(),sdpFromJson(o.getString("sdp")));}
+   else if(ty.equals("candidate")){if(peer!=null)peer.addIceCandidate(candidateFromJson(o.getString("candidate")));}
    else if(ty.equals("peer-left")){status.setText("Friend left");}
    else if(ty.equals("watch")){openUrl(o.optString("url"));}
   }catch(Exception e){toast("Signal error");}
@@ -85,7 +86,7 @@ public class MainActivity extends Activity implements SignalingClient.Listener {
   peer=factory.createPeerConnection(ice,new PeerConnection.Observer(){
    public void onSignalingChange(PeerConnection.SignalingState s){} public void onIceConnectionChange(PeerConnection.IceConnectionState s){runOnUiThread(()->status.setText("Call: "+s));}
    public void onIceConnectionReceivingChange(boolean b){} public void onIceGatheringChange(PeerConnection.IceGatheringState s){}
-   public void onIceCandidate(IceCandidate c){try{JSONObject o=new JSONObject();o.put("type","candidate");o.put("room",roomId);o.put("to",peerId);o.put("from",id);o.put("candidate",c.toJson());signal.send(o);}catch(Exception e){}}
+   public void onIceCandidate(IceCandidate c){try{JSONObject o=new JSONObject();o.put("type","candidate");o.put("room",roomId);o.put("to",peerId);o.put("from",id);o.put("candidate",candidateToJson(c));signal.send(o);}catch(Exception e){}}
    public void onIceCandidatesRemoved(IceCandidate[] c){} public void onAddStream(MediaStream s){}
    public void onRemoveStream(MediaStream s){} public void onDataChannel(DataChannel d){} public void onRenegotiationNeeded(){}
    public void onAddTrack(RtpReceiver r,MediaStream[] s){if(r.track() instanceof VideoTrack)((VideoTrack)r.track()).addSink(remote);}
@@ -96,7 +97,20 @@ public class MainActivity extends Activity implements SignalingClient.Listener {
  }
  void offer(){ensurePeer();peer.createOffer(new SimpleSdpObserver(){public void onCreateSuccess(SessionDescription d){peer.setLocalDescription(new SimpleSdpObserver(),d);sendSdp("offer",d);}},new MediaConstraints());}
  void answer(){peer.createAnswer(new SimpleSdpObserver(){public void onCreateSuccess(SessionDescription d){peer.setLocalDescription(new SimpleSdpObserver(),d);sendSdp("answer",d);}},new MediaConstraints());}
- void sendSdp(String type,SessionDescription d){try{JSONObject o=new JSONObject();o.put("type",type);o.put("room",roomId);o.put("to",peerId);o.put("from",id);o.put("sdp",d.toJson());signal.send(o);}catch(Exception e){}}
+ void sendSdp(String type,SessionDescription d){try{JSONObject o=new JSONObject();o.put("type",type);o.put("room",roomId);o.put("to",peerId);o.put("from",id);o.put("sdp",sdpToJson(d));signal.send(o);}catch(Exception e){}}
+
+ String sdpToJson(SessionDescription d){
+  try{ JSONObject o=new JSONObject(); o.put("type",d.type.canonicalForm()); o.put("sdp",d.description); return o.toString(); }catch(Exception e){return "{}";}
+ }
+ SessionDescription sdpFromJson(String json)throws Exception{
+  JSONObject o=new JSONObject(json); return new SessionDescription(SessionDescription.Type.fromCanonicalForm(o.optString("type")),o.optString("sdp"));
+ }
+ String candidateToJson(IceCandidate c){
+  try{ JSONObject o=new JSONObject(); o.put("sdpMid",c.sdpMid); o.put("sdpMLineIndex",c.sdpMLineIndex); o.put("candidate",c.sdp); return o.toString(); }catch(Exception e){return "{}";}
+ }
+ IceCandidate candidateFromJson(String json)throws Exception{
+  JSONObject o=new JSONObject(json); String mid=o.isNull("sdpMid")?null:o.optString("sdpMid",null); int index=o.optInt("sdpMLineIndex",0); return new IceCandidate(mid,index,o.optString("candidate"));
+ }
 
  void startCamera(){
   try{
